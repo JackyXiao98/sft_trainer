@@ -56,6 +56,21 @@ class DataBuilder:
         
         return datasets
     
+    def convert_messages_to_text(self, messages: List[Dict]) -> str:
+        """将messages格式转换为训练用的文本格式"""
+        if not messages:
+            return ""
+        
+        # 将对话转换为文本格式
+        text_parts = []
+        for message in messages:
+            role = message.get('role', '')
+            content = message.get('content', '')
+            if role and content:
+                text_parts.append(f"{role}: {content}")
+        
+        return "\n".join(text_parts)
+    
     def sample_by_token_count(self, dataset: Dataset, token_limit: int, subset_name: str) -> Dataset:
         """根据token数量采样数据集"""
         console.print(f"[yellow]正在从 {subset_name} 采样 {token_limit:,} tokens...[/yellow]")
@@ -67,10 +82,19 @@ class DataBuilder:
             task = progress.add_task(f"采样 {subset_name}", total=len(dataset))
             
             for i, example in enumerate(dataset):
-                # 对文本进行tokenize
-                text = example.get('text', '')
+                # 处理messages格式的数据
+                messages = example.get('messages', [])
+                if not messages:
+                    continue
+                
+                # 转换为文本格式
+                text = self.convert_messages_to_text(messages)
                 if not text:
                     continue
+                
+                # 创建新的example，包含转换后的text字段
+                new_example = dict(example)
+                new_example['text'] = text
                 
                 tokens = self.tokenizer.encode(text, add_special_tokens=False)
                 token_count = len(tokens)
@@ -79,7 +103,7 @@ class DataBuilder:
                 if total_tokens + token_count > token_limit:
                     break
                 
-                sampled_examples.append(example)
+                sampled_examples.append(new_example)
                 total_tokens += token_count
                 
                 progress.update(task, advance=1)

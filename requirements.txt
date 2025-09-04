@@ -7,11 +7,11 @@ accelerate==0.30.1
 
 # Utilities
 pyyaml==6.0.1
-wandb==0.17.0
+wandb==0.23.3
 rich==13.7.1 # 用于美化输出，可选
 
 # Performance
 # 注意: flash-attn 需要根据你的 CUDA 版本和环境进行编译安装
 # pip install flash-attn --no-build-isolation
 # 以下为预编译包示例，请根据实际情况选择
-flash-attn==2.5.8
+# flash-attn==2.5.8

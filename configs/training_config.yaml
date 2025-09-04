@@ -50,7 +50,7 @@ fsdp:
 
 # 数据配置
 data:
-  dataset_name: "mixture-of-thoughts"
+  dataset_name: "open-r1/Mixture-of-Thoughts"
   dataset_config_names: ["math", "code", "science"]
   token_limits:
     train_base: 660000  # 每个基础数据集的token数量
@@ -67,7 +67,7 @@ wandb:
 sft:
   max_seq_length: 8192
   packing: false
-  dataset_text_field: "text"
+  dataset_text_field: "text"  # 数据处理后统一使用text字段
   dataset_kwargs:
     add_special_tokens: false
     skip_prepare_dataset: false
