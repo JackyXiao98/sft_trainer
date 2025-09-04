@@ -46,7 +46,7 @@ wandb login
 - `gradient_accumulation_steps`
 - `learning_rate`
 - `num_train_epochs`
-- `wandb_project` (设置为你的 wandb 项目名称)
+- `wandb.project` (设置为你的 wandb 项目名称)
 
 **重要：** 确保 `fsdp` 相关的配置是开启的，以便使用 FSDP。
 
@@ -68,6 +68,24 @@ bash scripts/run_experiments.sh
     * 对于每个验证集，调用 `src/evaluate.py`，使用刚刚训练好的模型计算 loss。
 3.  **结果汇总：** 所有评估结果（loss 值）将被汇总并保存在项目根目录下的 `results.csv` 文件中。
 
-### 2.3 查看结果
+### 2.3 GPU配置
+
+项目支持单GPU和多GPU训练，GPU使用方式为自动检测：
+
+**控制GPU使用：**
+```bash
+# 使用特定GPU
+CUDA_VISIBLE_DEVICES=0,1 bash scripts/run_experiments.sh
+
+# 使用torchrun进行多GPU训练
+torchrun --nproc_per_node=4 src/train.py --dataset_path data/training/baseline
+```
+
+**FSDP分布式训练：**
+- 项目使用FSDP (Fully Sharded Data Parallel)进行分布式训练
+- 自动检测可用GPU数量并进行模型分片
+- 支持在有限GPU内存下训练大模型
+
+### 2.4 查看结果
 
 实验完成后，可以查看 `results.csv` 文件获取所有 39 个 loss 值，用于后续的 Scaling Law 分析。同时，你也可以在 W&B 的项目页面上查看详细的训练曲线和指标。
