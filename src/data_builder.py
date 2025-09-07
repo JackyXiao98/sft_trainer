@@ -40,7 +40,7 @@ class DataBuilder:
         console.print(f"验证集token限制: {self.val_token_limit:,}")
     
     def load_source_datasets(self) -> Dict[str, Dataset]:
-        """加载源数据集"""
+        """加载源数据集 - 可被子类重写以支持不同的数据源"""
         console.print("[blue]正在加载mixture-of-thoughts数据集...[/blue]")
         
         datasets = {}
@@ -61,15 +61,24 @@ class DataBuilder:
         if not messages:
             return ""
         
-        # 将对话转换为文本格式
-        text_parts = []
-        for message in messages:
-            role = message.get('role', '')
-            content = message.get('content', '')
-            if role and content:
-                text_parts.append(f"{role}: {content}")
-        
-        return "\n".join(text_parts)
+        # 使用tokenizer的apply_chat_template方法进行统一转换
+        try:
+            text = self.tokenizer.apply_chat_template(
+                messages, 
+                tokenize=False, 
+                add_generation_prompt=False
+            )
+            return text
+        except Exception as e:
+            # 如果apply_chat_template失败，回退到原始方法
+            console.print(f"[yellow]Warning: apply_chat_template failed, using fallback method: {e}[/yellow]")
+            text_parts = []
+            for message in messages:
+                role = message.get('role', '')
+                content = message.get('content', '')
+                if role and content:
+                    text_parts.append(f"{role}: {content}")
+            return "\n".join(text_parts)
     
     def sample_by_token_count(self, dataset: Dataset, token_limit: int, subset_name: str) -> Dataset:
         """根据token数量采样数据集"""
@@ -95,9 +104,16 @@ class DataBuilder:
                 # 创建新的example，包含转换后的text字段
                 new_example = dict(example)
                 new_example['text'] = text
+                # 移除原始的messages字段，避免tokenizer混淆
+                if 'messages' in new_example:
+                    del new_example['messages']
                 
                 tokens = self.tokenizer.encode(text, add_special_tokens=False)
                 token_count = len(tokens)
+                
+                # 跳过token长度超过8192的样本
+                if token_count >= 8192:
+                    continue
                 
                 # 检查是否超过限制
                 if total_tokens + token_count > token_limit:

@@ -1,6 +1,6 @@
 # Core ML Libraries
 torch==2.3.0 --index-url https://download.pytorch.org/whl/cu121
-transformers==4.41.2
+transformers>=4.51.0
 trl==0.8.6
 datasets==2.19.0
 accelerate==0.30.1
@@ -9,9 +9,11 @@ accelerate==0.30.1
 pyyaml==6.0.1
 wandb==0.23.3
 rich==13.7.1 # 用于美化输出，可选
+pandas>=2.0.0 # 用于数据处理
+pyarrow>=10.0.0 # 用于parquet文件处理
 
+wheel==0.45.1
 # Performance
 # 注意: flash-attn 需要根据你的 CUDA 版本和环境进行编译安装
-# pip install flash-attn --no-build-isolation
-# 以下为预编译包示例，请根据实际情况选择
-# flash-attn==2.5.8
+# pip install ninja
+# MAX_JOBS=4 pip install flash-attn --no-build-isolation

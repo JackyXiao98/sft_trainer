@@ -5,6 +5,7 @@ SFT训练脚本
 """
 
 import os
+os.environ["TOKENIZERS_PARALLELISM"] = "false"
 import sys
 import yaml
 import argparse
@@ -41,14 +42,15 @@ class SFTTrainingPipeline:
             trust_remote_code=self.config['model']['trust_remote_code']
         )
         
-        # 设置pad token
+        # 设置特殊token
         if self.tokenizer.pad_token is None:
             self.tokenizer.pad_token = self.tokenizer.eos_token
+            console.print(f"[yellow]设置 pad_token 为 eos_token: {self.tokenizer.eos_token}[/yellow]")
         
         # 加载模型
         model_kwargs = {
             'trust_remote_code': self.config['model']['trust_remote_code'],
-            'torch_dtype': torch.bfloat16 if self.config['misc']['bf16'] else torch.float16,
+            'dtype': torch.bfloat16 if self.config['misc']['bf16'] else torch.float16,
             'device_map': None,  # FSDP会处理设备分配
         }
         
@@ -60,12 +62,39 @@ class SFTTrainingPipeline:
             **model_kwargs
         )
         
-        # 启用梯度检查点
+        # 确保模型配置与分词器对齐
+        if hasattr(self.model.config, 'pad_token_id') and self.model.config.pad_token_id != self.tokenizer.pad_token_id:
+            console.print(f"[yellow]对齐模型 pad_token_id: {self.model.config.pad_token_id} -> {self.tokenizer.pad_token_id}[/yellow]")
+            self.model.config.pad_token_id = self.tokenizer.pad_token_id
+        
+        if hasattr(self.model.config, 'bos_token_id') and self.model.config.bos_token_id != self.tokenizer.bos_token_id:
+            console.print(f"[yellow]对齐模型 bos_token_id: {self.model.config.bos_token_id} -> {self.tokenizer.bos_token_id}[/yellow]")
+            self.model.config.bos_token_id = self.tokenizer.bos_token_id
+        
+        if hasattr(self.model.config, 'eos_token_id') and self.model.config.eos_token_id != self.tokenizer.eos_token_id:
+            console.print(f"[yellow]对齐模型 eos_token_id: {self.model.config.eos_token_id} -> {self.tokenizer.eos_token_id}[/yellow]")
+            self.model.config.eos_token_id = self.tokenizer.eos_token_id
+        
+        # 调整模型的embedding层大小以匹配分词器
+        if len(self.tokenizer) > self.model.config.vocab_size:
+            console.print(f"[yellow]调整模型词汇表大小: {self.model.config.vocab_size} -> {len(self.tokenizer)}[/yellow]")
+            self.model.resize_token_embeddings(len(self.tokenizer))
+        
+        # 启用梯度检查点并禁用缓存
         if self.config['misc']['gradient_checkpointing']:
             self.model.gradient_checkpointing_enable()
+            # 禁用use_cache以避免与gradient checkpointing冲突
+            if hasattr(self.model.config, 'use_cache'):
+                self.model.config.use_cache = False
+                console.print(f"[yellow]禁用 use_cache 以兼容 gradient checkpointing[/yellow]")
         
         console.print(f"[green]模型和tokenizer加载完成[/green]")
         console.print(f"模型参数量: {self.model.num_parameters():,}")
+        console.print(f"词汇表大小: {len(self.tokenizer):,}")
+        console.print(f"特殊token配置:")
+        console.print(f"  - pad_token: {self.tokenizer.pad_token} (id: {self.tokenizer.pad_token_id})")
+        console.print(f"  - bos_token: {self.tokenizer.bos_token} (id: {self.tokenizer.bos_token_id})")
+        console.print(f"  - eos_token: {self.tokenizer.eos_token} (id: {self.tokenizer.eos_token_id})")
     
     def load_dataset(self, dataset_path: str):
         """加载训练数据集"""
@@ -82,17 +111,15 @@ class SFTTrainingPipeline:
         fsdp_config = self.config['fsdp']
         misc_config = self.config['misc']
         
-        # 构建FSDP配置
+        # 构建FSDP配置字典 (用于fsdp_config参数)
         fsdp_config_dict = {
-            'fsdp': fsdp_config['fsdp'],
-            'fsdp_transformer_layer_cls_to_wrap': fsdp_config['fsdp_transformer_layer_cls_to_wrap'],
-            'fsdp_backward_prefetch': fsdp_config['fsdp_backward_prefetch'],
-            'fsdp_forward_prefetch': fsdp_config['fsdp_forward_prefetch'],
-            'fsdp_use_orig_params': fsdp_config['fsdp_use_orig_params'],
-            'fsdp_cpu_ram_efficient_loading': fsdp_config['fsdp_cpu_ram_efficient_loading'],
-            'fsdp_auto_wrap_policy': fsdp_config['fsdp_auto_wrap_policy'],
-            'fsdp_sharding_strategy': fsdp_config['fsdp_sharding_strategy'],
-            'fsdp_state_dict_type': fsdp_config['fsdp_state_dict_type'],
+            'backward_prefetch_policy': fsdp_config['fsdp_backward_prefetch'],
+            'forward_prefetch': fsdp_config['fsdp_forward_prefetch'],
+            'use_orig_params': fsdp_config['fsdp_use_orig_params'],
+            'cpu_ram_efficient_loading': fsdp_config['fsdp_cpu_ram_efficient_loading'],
+            'auto_wrap_policy': fsdp_config['fsdp_auto_wrap_policy'],
+            'sharding_strategy': fsdp_config['fsdp_sharding_strategy'],
+            'state_dict_type': fsdp_config['fsdp_state_dict_type'],
         }
         
         training_args = TrainingArguments(
@@ -113,7 +140,7 @@ class SFTTrainingPipeline:
             load_best_model_at_end=training_config['load_best_model_at_end'],
             metric_for_best_model=training_config['metric_for_best_model'],
             greater_is_better=training_config['greater_is_better'],
-            evaluation_strategy=training_config['evaluation_strategy'],
+            eval_strategy=training_config['evaluation_strategy'],
             save_strategy=training_config['save_strategy'],
             report_to=training_config['report_to'],
             run_name=run_name,
@@ -132,7 +159,9 @@ class SFTTrainingPipeline:
             disable_tqdm=misc_config['disable_tqdm'],
             prediction_loss_only=misc_config['prediction_loss_only'],
             include_inputs_for_metrics=misc_config['include_inputs_for_metrics'],
-            **fsdp_config_dict
+            fsdp=fsdp_config['fsdp'],
+            fsdp_config=fsdp_config_dict,
+            fsdp_transformer_layer_cls_to_wrap=fsdp_config['fsdp_transformer_layer_cls_to_wrap']
         )
         
         return training_args
@@ -172,6 +201,25 @@ class SFTTrainingPipeline:
         # 设置训练参数
         training_args = self.setup_training_arguments(output_dir, run_name)
         
+        # 创建自定义数据整理器来处理text字段
+        def data_collator(features):
+            # 提取text字段并进行tokenization
+            texts = [feature['text'] for feature in features]
+            
+            # 使用tokenizer进行批量tokenization
+            batch = self.tokenizer(
+                texts,
+                padding=True,
+                truncation=True,
+                max_length=sft_config['max_seq_length'],
+                return_tensors="pt"
+            )
+            
+            # 对于因果语言模型，labels就是input_ids的副本
+            batch['labels'] = batch['input_ids'].clone()
+            
+            return batch
+        
         # 创建SFTTrainer
         sft_config = self.config['sft']
         trainer = SFTTrainer(
@@ -182,7 +230,8 @@ class SFTTrainingPipeline:
             max_seq_length=sft_config['max_seq_length'],
             packing=sft_config['packing'],
             dataset_text_field=sft_config['dataset_text_field'],
-            dataset_kwargs=sft_config['dataset_kwargs']
+            data_collator=data_collator,
+            formatting_func=None  # 禁用自动格式化，使用预处理的text字段
         )
         
         console.print(f"[green]SFTTrainer创建完成[/green]")
@@ -190,11 +239,10 @@ class SFTTrainingPipeline:
         # 开始训练
         console.print(f"[bold yellow]开始训练...[/bold yellow]")
         trainer.train()
-        
-        # 保存模型
-        console.print(f"[blue]保存模型到: {output_dir}[/blue]")
         trainer.save_model()
-        trainer.save_state()
+        # trainer.save_state()
+        # 训练完成，模型已根据save_strategy自动保存
+        console.print(f"[green]训练完成！模型已保存到: {output_dir}[/green]")
         
         # 结束wandb运行
         wandb.finish()
