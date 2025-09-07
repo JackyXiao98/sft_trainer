@@ -3,7 +3,8 @@
 # Data directories (contains large datasets)
 data/
 outputs/
-results.csv
+scaling_env/
+*.csv
 results.json
 
 # Python
