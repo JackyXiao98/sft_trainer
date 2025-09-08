@@ -259,16 +259,16 @@ def main():
     # 配置数据集权重（可以根据需要调整）
     # 默认所有数据集权重为1，表示同等重要性
     # 如果需要调整某个数据集的重要性，可以修改对应的权重值
-    # dataset_weights = [1.0] * len(dataset_names)  # 默认权重为1
+    dataset_weights = [1.0] * len(dataset_names)  # 默认权重为1
     
     # 示例：如果想要某些数据集更重要，可以这样设置：
     dataset_weights = [
-        1.0,  # 第1个数据集权重为2（更重要）
-        1.0,  # 第2个数据集权重为1（正常）
-        0.5,  # 第3个数据集权重为0.5（较不重要）
-        0.5,
-        0.5,
-        0.5,
+        1.0,  
+        1.0,  
+        2,  
+        2,
+        2,
+        2,
         1.0,
         1.0,
         1.0,
@@ -342,12 +342,12 @@ def main():
         
         # 保存详细结果
         results_df = pd.DataFrame(results_data)
-        output_path = '../dataset_mixing_optimization_results.csv'
+        output_path = './dataset_mixing_optimization_results.csv'
         results_df.to_csv(output_path, index=False)
         
         # 保存优化摘要
         summary_df = pd.DataFrame([summary_data])
-        summary_path = '../optimization_summary.csv'
+        summary_path = './optimization_summary.csv'
         summary_df.to_csv(summary_path, index=False)
         
         print(f"\n结果已保存到: {output_path}")
