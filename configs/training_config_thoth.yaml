@@ -1,0 +1,86 @@
+# SFT Scaling Law 训练配置文件
+
+# 模型配置
+model:
+  model_name: "/mnt/hdfs/selection/tt_stage2_model/domain_safe"  # 使用Qwen3-8B作为基础模型
+  max_seq_length: 128
+  use_flash_attention_2: true
+  trust_remote_code: true
+
+# 训练参数
+training:
+  output_dir: "/home/tiger/.cache/outputs"
+  per_device_train_batch_size: 16
+  per_device_eval_batch_size: 16
+  gradient_accumulation_steps: 8
+  learning_rate: 2.0e-5
+  weight_decay: 0.01
+  num_train_epochs: 1
+  max_steps: -1
+  warmup_ratio: 0.1
+  lr_scheduler_type: "cosine"
+  logging_steps: 10
+  save_steps: 500
+  eval_steps: 500
+  save_total_limit: 2
+  load_best_model_at_end: false
+  metric_for_best_model: "loss"
+  greater_is_better: false
+  evaluation_strategy: "no"
+  save_strategy: "no"
+  report_to: "wandb"
+  run_name: null  # 将在训练脚本中动态设置
+  seed: 42
+  data_seed: 42
+  dataloader_num_workers: 4
+  remove_unused_columns: false
+  label_names: ["labels"]
+  
+# FSDP配置
+fsdp:
+  fsdp: "full_shard auto_wrap"
+  fsdp_transformer_layer_cls_to_wrap: "ThothDecoderLayer"
+  fsdp_backward_prefetch: "backward_pre"  # 注意：在代码中映射为fsdp_backward_prefetch_policy
+  fsdp_forward_prefetch: false
+  fsdp_use_orig_params: true
+  fsdp_cpu_ram_efficient_loading: true
+  fsdp_auto_wrap_policy: "TRANSFORMER_BASED_WRAP"
+  fsdp_sharding_strategy: "FULL_SHARD"
+  fsdp_state_dict_type: "SHARDED_STATE_DICT"
+
+# 数据配置
+data:
+  dataset_name: "open-r1/Mixture-of-Thoughts"
+  dataset_config_names: ["math", "code", "science"]
+  token_limits:
+    train_base: 660000  # 每个基础数据集的token数量
+    validation: 1000000  # 每个验证集的token数量
+  
+# Wandb配置
+wandb:
+  project: "sft-scaling-law"  # 请修改为你的wandb项目名称
+  entity: null  # 可选：你的wandb用户名或团队名
+  tags: ["sft", "scaling-law", "qwen"]
+  notes: "SFT Scaling Law实验"
+
+# SFT特定配置
+sft:
+  max_seq_length: 128
+  packing: false
+  dataset_text_field: "text"  # 数据处理后统一使用text字段
+  dataset_kwargs:
+    add_special_tokens: false
+    skip_prepare_dataset: true  # 跳过自动数据预处理，使用我们预处理的text字段
+
+# 其他配置
+misc:
+  bf16: true
+  fp16: false
+  tf32: true
+  gradient_checkpointing: true
+  ddp_find_unused_parameters: false
+  group_by_length: false
+  length_column_name: "length"
+  disable_tqdm: false
+  prediction_loss_only: true
+  include_inputs_for_metrics: false

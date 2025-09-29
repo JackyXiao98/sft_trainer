@@ -116,7 +116,7 @@ train_and_evaluate_models() {
     for dataset in "${training_datasets[@]}"; do
         print_info "开始训练模型: $dataset"
         
-        output_dir="outputs/model_on_${dataset}"
+        output_dir="/home/tiger/.cache/outputs/model_on_${dataset}"
         
         # 删除可能存在的旧模型
         if [ -d "$output_dir" ]; then

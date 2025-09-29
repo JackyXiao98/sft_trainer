@@ -60,7 +60,7 @@ generate_parquet_datasets() {
 check_parquet_data_source() {
     print_info "检查parquet数据源..."
     
-    local base_dir="/mnt/hdfs/selection/from_jiaxiang_wu/general_n_safety_datasets"
+    local base_dir="/mnt/hdfs/selection/from_jiaxiang_wu/general_n_safety_datasets_250925"
     
     if [ ! -d "$base_dir" ]; then
         print_error "parquet数据源目录不存在: $base_dir"
@@ -70,9 +70,9 @@ check_parquet_data_source() {
     
     # 检查一些关键文件是否存在
     local test_files=(
-        "tulu3_qwen3_2507_no_think_coding.parquet"
+        "tulu3_qwen3_2507_no_think_coding_8k.parquet"
         "safety_cn_bias.parquet"
-        "open_r1_qwen3_2507_0804_think_coding_8k.parquet"
+        "open_r1_qwen3_2507_think_coding_8k.parquet"
     )
     
     local found_files=0
@@ -219,7 +219,7 @@ parse_parquet_args() {
             echo "  - 源数据集: 13个parquet文件"
             echo "  - 训练集: 53个（1个全量 + 13*4个变体）"
             echo "  - 验证集: 13个（每个源数据集一个）"
-            echo "  - 数据源: /mnt/hdfs/selection/from_jiaxiang_wu/general_n_safety_datasets"
+            echo "  - 数据源: hdfs://harunava/home/byte_pns_pilab_fl/selection/from_jiaxiang_wu/general_n_safety_datasets_250925"
             exit 0
             ;;
         *)

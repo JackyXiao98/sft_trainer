@@ -26,26 +26,30 @@ class ParquetDataBuilder(DataBuilder):
         super().__init__(config_path)
         
         # parquet数据集配置
-        self.base_dir = '/mnt/hdfs/selection/from_jiaxiang_wu/general_n_safety_datasets'
+        self.base_dir = "/mnt/hdfs/selection/from_jiaxiang_wu/general_n_safety_datasets_250925"
         self.datasets_to_load = {
-            "通用任务, non-thinking模式训练数据 (5 domains)": [
-                'tulu3_qwen3_2507_no_think_coding',
-                'tulu3_qwen3_2507_no_think_instruction',
-                'tulu3_qwen3_2507_no_think_knowledge',
-                'tulu3_qwen3_2507_no_think_math',
-                'tulu3_qwen3_2507_no_think_multilingual'
+            "通用任务, non-thinking模式训练数据 (6 domains)": [
+                'nemotron_qwen3_2507_no_think_chat_8k',
+                'tulu3_qwen3_2507_no_think_coding_8k',
+                'tulu3_qwen3_2507_no_think_instruction_8k',
+                'tulu3_qwen3_2507_no_think_knowledge_8k',
+                'tulu3_qwen3_2507_no_think_math_8k',
+                'tulu3_qwen3_2507_no_think_multilingual_8k'
             ],
-            "通用任务, thinking模式训练数据 (4 domains)": [
-                'open_r1_qwen3_2507_0804_think_coding_8k',
-                'open_r1_qwen3_2507_0804_think_math_8k',
-                'tulu3_qwen3_2507_0805_think_knowledge_8k',
-                'tulu3_qwen3_2507_0805_think_multilingual_8k'
+            "通用任务, thinking模式训练数据 (7 domains)": [
+                'open_r1_qwen3_2507_think_coding_8k',
+                'open_r1_qwen3_2507_think_math_8k',
+                'tulu3_qwen3_2507_think_coding_8k',
+                'tulu3_qwen3_2507_think_instruction_8k',
+                'tulu3_qwen3_2507_think_knowledge_8k',
+                'tulu3_qwen3_2507_think_math_8k',
+                'tulu3_qwen3_2507_think_multilingual_8k'
             ],
             "安全对齐任务, 中英文为主的non-thinking & thinking模式训练数据 (4 domains)": [
                 'safety_cn_bias',
-                'safety_tier1',
-                'safety_tier2',
-                'safety_tier3'
+                'safety_rated_seal_safety_tier1',
+                'safety_rated_seal_safety_tier2',
+                'safety_rated_seal_safety_tier3'
             ]
         }
         

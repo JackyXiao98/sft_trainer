@@ -6,12 +6,6 @@
 基于scaling law参数，为13个数据集计算最优的数据配比。
 使用SLSQP算法在总数据预算约束下最小化总预测损失。
 
-新功能：数据集权重支持
-- 支持为每个数据集设置重要性权重
-- 在计算总损失时，每个数据集的损失会乘以对应的权重
-- 默认所有数据集权重为1（同等重要性）
-- 可以通过修改main()函数中的dataset_weights列表来调整权重
-
 输入: scaling_law_parameters.csv (包含13个数据集的scaling law参数)
 输出: dataset_mixing_optimization_results.csv (详细配比结果，包含数据集权重)
      optimization_summary.csv (优化摘要)
@@ -21,8 +15,6 @@
 - 权重为2.0：双倍重要性（该数据集的损失在优化中权重更大）
 - 权重为0.5：较低重要性（该数据集的损失在优化中权重较小）
 
-作者: AI Assistant
-日期: 2024
 """
 
 import pandas as pd
@@ -125,8 +117,8 @@ def optimize_13_datasets_mixing(datasets_params, dataset_names, dataset_weights=
     }
     
     # 初始猜测: 均匀分布的权重
-    x0 = np.array([1/n_datasets] * n_datasets)
-    
+    x0 = np.array([1/n_datasets] * n_datasets) 
+
     try:
         # 使用SLSQP算法进行优化
         result = minimize(
@@ -218,7 +210,7 @@ def main():
     print()
     
     # 读取scaling law参数文件
-    csv_path = '../scaling_law_parameters.csv'
+    csv_path = './qwen4b_scaling_law_parameters.csv'
     if not os.path.exists(csv_path):
         print(f"错误: 找不到文件 {csv_path}")
         return
@@ -262,21 +254,7 @@ def main():
     dataset_weights = [1.0] * len(dataset_names)  # 默认权重为1
     
     # 示例：如果想要某些数据集更重要，可以这样设置：
-    dataset_weights = [
-        1.0,  
-        1.0,  
-        2,  
-        2,
-        2,
-        2,
-        1.0,
-        1.0,
-        1.0,
-        1.0,
-        1.0,
-        1.0,
-        1.0
-    ]
+    dataset_weights = [1.0] * 3 + [2, 2, 2, 2] + [1.0] * 10
     
     print("数据集权重配置:")
     for i, (name, weight) in enumerate(zip(dataset_names, dataset_weights)):
@@ -321,11 +299,11 @@ def main():
                 'tokens': result[f'{dataset_name}_tokens'],
                 'percentage': result[f'{dataset_name}_weight'] * 100,
                 'dataset_importance_weight': dataset_weights[i],  # 添加数据集重要性权重
-                'C': datasets_params[i]['C'],
-                'k': datasets_params[i]['k'],
-                'alpha': datasets_params[i]['alpha'],
-                'beta': datasets_params[i]['beta'],
-                'E': datasets_params[i]['E']
+                # 'C': datasets_params[i]['C'],
+                # 'k': datasets_params[i]['k'],
+                # 'alpha': datasets_params[i]['alpha'],
+                # 'beta': datasets_params[i]['beta'],
+                # 'E': datasets_params[i]['E']
             })
         
         # 添加优化摘要信息
@@ -342,16 +320,16 @@ def main():
         
         # 保存详细结果
         results_df = pd.DataFrame(results_data)
-        output_path = './dataset_mixing_optimization_results.csv'
+        output_path = './qwen4b_dataset_mixing_optimization_results.csv'
         results_df.to_csv(output_path, index=False)
         
         # 保存优化摘要
-        summary_df = pd.DataFrame([summary_data])
-        summary_path = './optimization_summary.csv'
-        summary_df.to_csv(summary_path, index=False)
+        # summary_df = pd.DataFrame([summary_data])
+        # summary_path = './optimization_summary.csv'
+        # summary_df.to_csv(summary_path, index=False)
         
         print(f"\n结果已保存到: {output_path}")
-        print(f"优化摘要已保存到: {summary_path}")
+        # print(f"优化摘要已保存到: {summary_path}")
         
     else:
         print("❌ 优化失败!")
