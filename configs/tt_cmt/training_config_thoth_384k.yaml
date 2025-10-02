@@ -2,7 +2,7 @@
 
 # 模型配置
 model:
-  model_name: "/mnt/hdfs/selection/tt_stage2_model/domain_safe" 
+  model_name: "/mnt/hdfs/selection/tt_stage2_model/v3_domain_cpt/ckpt384k_safe" 
   max_seq_length: 128
   max_seq_length_eval: 128
   use_flash_attention_2: true

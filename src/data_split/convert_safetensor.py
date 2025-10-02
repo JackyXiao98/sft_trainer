@@ -150,7 +150,8 @@ def convert_pytorch_to_safetensors(
     print("\n--- 步骤 1: 复制配置文件 ---")
     config_files = [
         "config.json", "tokenizer.json", "tokenizer_config.json", 
-        "special_tokens_map.json", "vocab.txt", "vocab.json", "merges.txt"
+        "special_tokens_map.json", "vocab.txt", "vocab.json", "merges.txt",
+        "mariana_config.json", "configuration_thoth.py", "modeling_thoth.py"
     ]
     
     for config_file in config_files:
@@ -364,15 +365,15 @@ def create_sharded_index(output_path: str, shard_files: list, tensors: Dict[str,
 
 def main():
     parser = argparse.ArgumentParser(description="将 PyTorch 模型转换为 safetensors 格式")
-    parser.add_argument("--input_path", type=str, required=True,
+    parser.add_argument("--input_path", type=str, default="/mnt/hdfs/selection/tt_stage2_model/general",
                        help="输入模型路径")
-    parser.add_argument("--output_path", type=str, required=True,
+    parser.add_argument("--output_path", type=str, default="/mnt/hdfs/selection/tt_stage2_model/general_safe",
                        help="输出路径")
-    parser.add_argument("--trust_remote_code", action="store_true",
+    parser.add_argument("--trust_remote_code", default=True,
                        help="是否信任远程代码")
     parser.add_argument("--max_shard_size", type=str, default="5GB",
                        help="最大分片大小 (例如: 5GB, 1TB)")
-    parser.add_argument("--force", action="store_true",
+    parser.add_argument("--force", default=True,
                        help="强制覆盖输出目录")
     parser.add_argument("--use_model_api", action="store_true", default=True,
                        help="使用 save_model API (推荐，自动处理共享张量)")

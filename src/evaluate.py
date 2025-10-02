@@ -123,12 +123,16 @@ class ModelEvaluator:
     
     def tokenize_function(self, examples):
         """tokenize函数"""
+        # 获取评估时的最大序列长度，如果没有设置则使用训练时的长度
+        eval_max_length = self.config['model'].get('max_seq_length_eval', 
+                                                   self.config['model']['max_seq_length'])
+        
         # 对文本进行tokenize
         tokenized = self.tokenizer(
             examples['text'],
             truncation=True,
             padding=False,
-            max_length=self.config['model']['max_seq_length'],
+            max_length=eval_max_length,
             return_tensors=None
         )
         
@@ -219,7 +223,9 @@ class ModelEvaluator:
         tokenized_dataset = dataset.map(
             self.tokenize_function,
             batched=True,
-            remove_columns=dataset.column_names
+            remove_columns=dataset.column_names,
+            num_proc=1, #使用多线程有bug
+            desc="Tokenizing dataset"
         )
         
         # 创建自定义数据整理器来处理已tokenized的数据
@@ -434,7 +440,7 @@ def main():
     parser.add_argument("--model_path", type=str, required=True, help="训练好的模型路径")
     parser.add_argument("--train_dataset_name", type=str, required=True, help="训练数据集名称")
     parser.add_argument("--output_file", type=str, default="results.csv", help="结果输出文件")
-    parser.add_argument("--config", type=str, default="configs/training_config.yaml", help="配置文件路径")
+    parser.add_argument("--config", type=str, default="configs/training_config_thoth.yaml", help="配置文件路径")
     
     # 支持单个验证集（向后兼容）
     parser.add_argument("--dataset_path", type=str, help="单个验证数据集路径")

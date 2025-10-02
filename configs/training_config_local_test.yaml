@@ -2,9 +2,10 @@
 
 # 模型配置
 model:
-  model_name: "Qwen/Qwen3-4B"  # 使用Qwen3-8B作为基础模型
+  model_name: "Qwen/Qwen3-8B"  # 使用Qwen3-8B作为基础模型
   max_seq_length: 8192
-  use_flash_attention_2: true
+  use_flash_attention_2: false
+  attn_implementation: "eager"  # 禁用 flash attention
   trust_remote_code: true
 
 # 训练参数
@@ -20,8 +21,8 @@ training:
   warmup_ratio: 0.1
   lr_scheduler_type: "cosine"
   logging_steps: 10
-  save_steps: 50000
-  eval_steps: 50000
+  save_steps: 500
+  eval_steps: 500
   save_total_limit: 2
   load_best_model_at_end: false
   metric_for_best_model: "loss"
@@ -33,13 +34,13 @@ training:
   seed: 42
   data_seed: 42
   dataloader_num_workers: 4
-  remove_unused_columns: false
+  remove_unused_columns: true
   label_names: ["labels"]
   
 # FSDP配置
 fsdp:
   fsdp: "full_shard auto_wrap"
-  fsdp_transformer_layer_cls_to_wrap: "Qwen3DecoderLayer"
+  fsdp_transformer_layer_cls_to_wrap: "Qwen3DecoderLayer"  # 保留用于向后兼容，但会被fsdp_config覆盖
   fsdp_backward_prefetch: "backward_pre"  # 注意：在代码中映射为fsdp_backward_prefetch_policy
   fsdp_forward_prefetch: false
   fsdp_use_orig_params: true
@@ -47,6 +48,9 @@ fsdp:
   fsdp_auto_wrap_policy: "TRANSFORMER_BASED_WRAP"
   fsdp_sharding_strategy: "FULL_SHARD"
   fsdp_state_dict_type: "SHARDED_STATE_DICT"
+  # 新的FSDP配置，使用activation_checkpointing替代gradient_checkpointing
+  activation_checkpointing: true
+  transformer_layer_cls_to_wrap: "Qwen3DecoderLayer"
 
 # 数据配置
 data:
@@ -68,16 +72,17 @@ sft:
   max_seq_length: 8192
   packing: false
   dataset_text_field: "text"  # 数据处理后统一使用text字段
-  dataset_kwargs:
-    add_special_tokens: false
-    skip_prepare_dataset: true  # 跳过自动数据预处理，使用我们预处理的text字段
+  # 移除 dataset_kwargs 以使用默认的数据处理流程
+  # dataset_kwargs:
+  #   add_special_tokens: false
+  #   skip_prepare_dataset: true  # 这个设置可能导致张量转换问题
 
 # 其他配置
 misc:
   bf16: true
   fp16: false
-  tf32: true
-  gradient_checkpointing: true
+  tf32: false  # 禁用 tf32 以兼容非 Ampere GPU
+  gradient_checkpointing: false  # 禁用TrainingArguments中的gradient_checkpointing，使用FSDP的activation_checkpointing
   ddp_find_unused_parameters: false
   group_by_length: false
   length_column_name: "length"

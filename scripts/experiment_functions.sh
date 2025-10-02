@@ -28,7 +28,7 @@ print_error() {
 }
 
 # 分布式评估配置
-NUM_GPUS=${NUM_GPUS:-8}  # 默认使用8个GPU，可通过环境变量覆盖
+NUM_GPUS=${NUM_GPUS:-7}  # 默认使用8个GPU，可通过环境变量覆盖
 
 # 时间统计变量
 SCRIPT_START_TIME=$(date +%s)
@@ -174,6 +174,7 @@ train_and_evaluate_models() {
         print_info "使用 $NUM_GPUS 个GPU进行分布式评估"
         torchrun --nproc_per_node=$NUM_GPUS --nnodes=1 --master_port=13238 --node_rank=0 \
             src/evaluate.py \
+            --config "configs/training_config_thoth.yaml" \
             --model_path "$output_dir" \
             --train_dataset_name "$dataset" \
             --dataset_paths "${validation_paths[@]}" \

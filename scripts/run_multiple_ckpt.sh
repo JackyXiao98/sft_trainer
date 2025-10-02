@@ -6,14 +6,7 @@
 # 分布式训练和评估配置:
 # - 使用 torchrun 启动分布式训练和评估，默认使用 8 个 GPU
 # - 可通过环境变量 NUM_GPUS 调整 GPU 数量，例如: NUM_GPUS=4 ./run_tiktok_exp.sh
-# - 确保系统有足够的 GPU 资源
-#
-# 安全特性:
-# - 脚本错误不会关闭你的terminal
-# - 使用函数返回值而非exit进行错误处理
-# - 支持优雅的错误恢复
 
-# 注意：不使用 set -e 以避免关闭terminal，改用手动错误检查
 
 # 导入通用函数库（只包含函数定义，不会执行任何主逻辑）
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -21,6 +14,11 @@ source "$SCRIPT_DIR/experiment_functions.sh"
 
 # 手动设置GPU数量
 NUM_GPUS=8
+
+# 配置文件目录和当前配置变量
+CONFIG_DIR="configs/tt_cmt"
+CURRENT_CONFIG=""
+CURRENT_CONFIG_NAME=""
 
 # 重写数据生成函数以使用TikTok数据构建器
 generate_tiktok_datasets() {
@@ -36,8 +34,8 @@ generate_tiktok_datasets() {
     print_info "使用TikTokCommentDataBuilder处理41个区间数据集"
     print_info "将生成41个训练集和41个验证集"
     
-    # 使用 training_config_thoth.yaml 配置文件
-    python3 src/data_split/tiktok_comment_data_builder.py --config configs/training_config_thoth.yaml
+    # 使用当前配置文件
+    python3 src/data_split/tiktok_comment_data_builder.py --config "$CURRENT_CONFIG"
     
     if [ $? -eq 0 ]; then
         print_success "TikTok评论数据集生成完成"
@@ -112,31 +110,32 @@ check_tiktok_dependencies() {
 
 # 检查配置文件
 check_tiktok_config() {
-    print_info "检查TikTok实验配置文件..."
+    print_info "检查TikTok实验配置文件: $CURRENT_CONFIG"
     
-    local config_file="configs/training_config_thoth.yaml"
-    
-    if [ ! -f "$config_file" ]; then
-        print_error "配置文件不存在: $config_file"
+    if [ ! -f "$CURRENT_CONFIG" ]; then
+        print_error "配置文件不存在: $CURRENT_CONFIG"
         return 1
     fi
     
-    if ! grep -q "use_flash_attention_2.*true" "$config_file"; then
+    if ! grep -q "use_flash_attention_2.*true" "$CURRENT_CONFIG"; then
         print_warning "配置文件中未启用flash_attention_2"
     fi
     
-    print_success "TikTok配置文件检查通过"
+    print_success "TikTok配置文件检查通过: $CURRENT_CONFIG"
     return 0
 }
 
-# 重写训练和评估函数以使用thoth配置
+# 重写训练和评估函数以使用当前配置
 train_and_evaluate_tiktok_models() {
-    print_info "=== 步骤2: 训练和评估TikTok模型（使用thoth配置） ==="
+    print_info "=== 步骤2: 训练和评估TikTok模型（使用配置: $CURRENT_CONFIG_NAME） ==="
+    
+    # 生成当前配置对应的结果文件名
+    local results_file="results_${CURRENT_CONFIG_NAME}.csv"
     
     # 清空之前的结果文件
-    if [ -f "results.csv" ]; then
-        rm results.csv
-        print_info "清空之前的结果文件"
+    if [ -f "$results_file" ]; then
+        rm "$results_file"
+        print_info "清空之前的结果文件: $results_file"
     fi
     
     # 获取所有训练数据集和验证数据集
@@ -171,14 +170,14 @@ train_and_evaluate_tiktok_models() {
         # 记录训练开始时间
         training_start_time=$(date +%s)
         
-        # 使用torchrun启动分布式训练，指定thoth配置文件
+        # 使用torchrun启动分布式训练，指定当前配置文件
         torchrun --nproc_per_node=$NUM_GPUS \
                  --master_port=17238 \
                  src/train.py \
             --dataset_path "/home/tiger/.cache/data/training/$dataset" \
             --output_dir "$output_dir" \
-            --config "configs/training_config_thoth.yaml" \
-            --run_name "tiktok-sft-$dataset"
+            --config "$CURRENT_CONFIG" \
+            --run_name "tiktok-sft-${CURRENT_CONFIG_NAME}-$dataset"
         
         # 计算训练时间
         training_end_time=$(date +%s)
@@ -210,12 +209,12 @@ train_and_evaluate_tiktok_models() {
         print_info "使用 $NUM_GPUS 个GPU进行分布式评估"
         torchrun --nproc_per_node=$NUM_GPUS --nnodes=1 --master_port=13238 --node_rank=0 \
             src/evaluate.py \
-            --config "configs/training_config_thoth.yaml" \
+            --config "$CURRENT_CONFIG" \
             --model_path "$output_dir" \
             --train_dataset_name "$dataset" \
             --dataset_paths "${validation_paths[@]}" \
             --validation_dataset_names "${validation_names[@]}" \
-            --output_file "results.csv"
+            --output_file "$results_file"
         
         # 计算评估时间
         evaluation_end_time=$(date +%s)
@@ -243,29 +242,18 @@ main_tiktok() {
     print_info "开始TikTok评论数据集 SFT Scaling Law实验"
     print_info "实验将包括: TikTok数据生成 -> 模型训练 -> 模型评估"
     print_info "预计生成41个训练集和41个验证集"
-    print_info "使用配置文件: configs/training_config_thoth.yaml"
+    
+    # 获取所有配置文件
+    config_files=($(ls "$CONFIG_DIR"/*.yaml 2>/dev/null))
+    
+    if [ ${#config_files[@]} -eq 0 ]; then
+        print_error "在 $CONFIG_DIR 目录下未找到任何 YAML 配置文件"
+        return 1
+    fi
+    
+    print_info "找到 ${#config_files[@]} 个配置文件: ${config_files[*]}"
     
     # 环境检查
-    # if ! check_python_env; then
-    #     print_error "Python环境检查失败，实验终止"
-    #     return 1
-    # fi
-    
-    # if ! check_tiktok_dependencies; then
-    #     print_error "TikTok依赖检查失败，实验终止"
-    #     return 1
-    # fi
-    
-    # if ! check_tiktok_config; then
-    #     print_error "TikTok配置检查失败，实验终止"
-    #     return 1
-    # fi
-    
-    # if ! check_tiktok_data_source; then
-    #     print_error "TikTok数据源检查失败，实验终止"
-    #     return 1
-    # fi
-    
     check_cuda
     # check_wandb
     
@@ -274,22 +262,61 @@ main_tiktok() {
     mkdir -p /home/tiger/.cache/data/training
     mkdir -p /home/tiger/.cache/data/validation
     
-    # 执行实验步骤
-    if ! generate_tiktok_datasets; then
-        print_error "TikTok数据生成失败，实验终止"
-        return 1
-    fi
+    # 对每个配置文件执行完整的实验流程
+    for config_file in "${config_files[@]}"; do
+        # 设置当前配置变量
+        CURRENT_CONFIG="$config_file"
+        CURRENT_CONFIG_NAME=$(basename "$config_file" .yaml)
+        
+        print_info "=========================================="
+        print_info "开始处理配置文件: $CURRENT_CONFIG_NAME"
+        print_info "配置文件路径: $CURRENT_CONFIG"
+        print_info "=========================================="
+        
+        # 环境检查
+        # if ! check_python_env; then
+        #     print_error "Python环境检查失败，跳过配置: $CURRENT_CONFIG_NAME"
+        #     continue
+        # fi
+        
+        # if ! check_tiktok_dependencies; then
+        #     print_error "TikTok依赖检查失败，跳过配置: $CURRENT_CONFIG_NAME"
+        #     continue
+        # fi
+        
+        if ! check_tiktok_config; then
+            print_error "配置文件检查失败，跳过配置: $CURRENT_CONFIG_NAME"
+            continue
+        fi
+        
+        # if ! check_tiktok_data_source; then
+        #     print_error "TikTok数据源检查失败，跳过配置: $CURRENT_CONFIG_NAME"
+        #     continue
+        # fi
+        
+        # 执行实验步骤
+        if ! generate_tiktok_datasets; then
+            print_error "TikTok数据生成失败，跳过配置: $CURRENT_CONFIG_NAME"
+            continue
+        fi
+        
+        if ! train_and_evaluate_tiktok_models; then
+            print_error "训练和评估失败，跳过配置: $CURRENT_CONFIG_NAME"
+            continue
+        fi
+        
+        print_success "配置 $CURRENT_CONFIG_NAME 的实验完成!"
+        print_info "结果已保存到: results_${CURRENT_CONFIG_NAME}.csv"
+    done
     
-    if ! train_and_evaluate_tiktok_models; then
-        print_error "训练和评估失败，实验终止"
-        return 1
-    fi
-    
-    show_results
-    
-    print_success "TikTok评论数据集 SFT Scaling Law实验完成!"
-    print_info "请查看 results.csv 文件获取详细结果"
-    print_info "实验涵盖了41个TikTok区间数据集的训练组合"
+    print_success "所有配置文件的TikTok评论数据集 SFT Scaling Law实验完成!"
+    print_info "结果文件:"
+    for config_file in "${config_files[@]}"; do
+        config_name=$(basename "$config_file" .yaml)
+        if [ -f "results_${config_name}.csv" ]; then
+            print_info "  - results_${config_name}.csv"
+        fi
+    done
     
     # 最终时间统计
     final_end_time=$(date +%s)
@@ -302,27 +329,62 @@ parse_tiktok_args() {
     while [[ $# -gt 0 ]]; do
     case $1 in
         --data-only)
-            print_info "仅生成TikTok评论数据集"
-            if check_python_env && check_tiktok_dependencies && check_tiktok_config && check_tiktok_data_source && generate_tiktok_datasets; then
-                print_success "TikTok数据生成完成"
-            else
-                print_error "TikTok数据生成失败"
+            print_info "仅生成TikTok评论数据集（所有配置文件）"
+            
+            # 获取所有配置文件
+            config_files=($(ls "$CONFIG_DIR"/*.yaml 2>/dev/null))
+            
+            if [ ${#config_files[@]} -eq 0 ]; then
+                print_error "在 $CONFIG_DIR 目录下未找到任何 YAML 配置文件"
+                return 1
             fi
+            
+            # 创建必要的目录
+            mkdir -p /home/tiger/.cache/data/training
+            mkdir -p /home/tiger/.cache/data/validation
+            
+            # 为每个配置文件生成数据
+            for config_file in "${config_files[@]}"; do
+                CURRENT_CONFIG="$config_file"
+                CURRENT_CONFIG_NAME=$(basename "$config_file" .yaml)
+                
+                print_info "为配置 $CURRENT_CONFIG_NAME 生成数据..."
+                
+                if check_tiktok_config && generate_tiktok_datasets; then
+                    print_success "配置 $CURRENT_CONFIG_NAME 的数据生成完成"
+                else
+                    print_error "配置 $CURRENT_CONFIG_NAME 的数据生成失败"
+                fi
+            done
             return 0
             ;;
         --train-only)
-            print_info "仅执行训练（使用现有TikTok数据集）"
-            if check_python_env && check_tiktok_config; then
-                check_cuda
-                check_wandb
-                if train_and_evaluate_tiktok_models; then
-                    print_success "训练完成"
-                else
-                    print_error "训练失败"
-                fi
-            else
-                print_error "环境检查失败"
+            print_info "仅执行训练（使用现有TikTok数据集，所有配置文件）"
+            
+            # 获取所有配置文件
+            config_files=($(ls "$CONFIG_DIR"/*.yaml 2>/dev/null))
+            
+            if [ ${#config_files[@]} -eq 0 ]; then
+                print_error "在 $CONFIG_DIR 目录下未找到任何 YAML 配置文件"
+                return 1
             fi
+            
+            check_cuda
+            # check_wandb
+            
+            # 为每个配置文件执行训练
+            for config_file in "${config_files[@]}"; do
+                CURRENT_CONFIG="$config_file"
+                CURRENT_CONFIG_NAME=$(basename "$config_file" .yaml)
+                
+                print_info "使用配置 $CURRENT_CONFIG_NAME 执行训练..."
+                
+                if check_tiktok_config && train_and_evaluate_tiktok_models; then
+                    print_success "配置 $CURRENT_CONFIG_NAME 的训练完成"
+                else
+                    print_error "配置 $CURRENT_CONFIG_NAME 的训练失败"
+                fi
+            done
             return 0
             ;;
         --eval-only)
@@ -344,16 +406,40 @@ parse_tiktok_args() {
             return 0
             ;;
         --check-config)
-            print_info "仅检查配置文件"
-            if check_tiktok_config; then
-                print_success "配置文件检查通过"
+            print_info "仅检查配置文件（所有配置文件）"
+            
+            # 获取所有配置文件
+            config_files=($(ls "$CONFIG_DIR"/*.yaml 2>/dev/null))
+            
+            if [ ${#config_files[@]} -eq 0 ]; then
+                print_error "在 $CONFIG_DIR 目录下未找到任何 YAML 配置文件"
+                return 1
+            fi
+            
+            all_passed=true
+            
+            # 检查每个配置文件
+            for config_file in "${config_files[@]}"; do
+                CURRENT_CONFIG="$config_file"
+                CURRENT_CONFIG_NAME=$(basename "$config_file" .yaml)
+                
+                if check_tiktok_config; then
+                    print_success "配置文件 $CURRENT_CONFIG_NAME 检查通过"
+                else
+                    print_error "配置文件 $CURRENT_CONFIG_NAME 检查失败"
+                    all_passed=false
+                fi
+            done
+            
+            if [ "$all_passed" = true ]; then
+                print_success "所有配置文件检查通过"
             else
-                print_error "配置文件检查失败"
+                print_error "部分配置文件检查失败"
             fi
             return 0
             ;;
         --help|-h)
-            echo "TikTok评论数据集 SFT Scaling Law 实验脚本"
+            echo "TikTok评论数据集 SFT Scaling Law 实验脚本（多配置文件版本）"
             echo "用法: $0 [选项]"
             echo "选项:"
             echo "  --data-only      仅生成TikTok评论数据集"
@@ -368,15 +454,21 @@ parse_tiktok_args() {
             echo "  - 训练集: 41个（每个区间一个）"
             echo "  - 验证集: 41个（每个区间一个）"
             echo "  - 数据源: /mnt/hdfs/selection/tiktok_cmt"
-            echo "  - 配置文件: configs/training_config_thoth.yaml"
+            echo "  - 配置文件目录: $CONFIG_DIR"
+            echo "  - 支持的配置文件: 128k, 256k, 384k, 500k"
+            echo ""
+            echo "功能特性:"
+            echo "  - 自动遍历 $CONFIG_DIR 目录下的所有 YAML 配置文件"
+            echo "  - 为每个配置文件生成独立的结果文件 (results_<config_name>.csv)"
+            echo "  - 支持多种序列长度配置的并行实验"
             echo ""
             echo "环境变量:"
             echo "  NUM_GPUS         设置GPU数量（默认: 8）"
             echo ""
             echo "示例:"
-            echo "  $0                    # 运行完整实验"
-            echo "  $0 --data-only        # 仅生成数据"
-            echo "  NUM_GPUS=4 $0         # 使用4个GPU运行实验"
+            echo "  $0                    # 运行所有配置文件的完整实验"
+            echo "  $0 --data-only        # 为所有配置文件生成数据"
+            echo "  NUM_GPUS=4 $0         # 使用4个GPU运行所有配置的实验"
             exit 0
             ;;
         *)
